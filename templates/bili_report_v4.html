@@ -760,6 +760,10 @@ const D = __TPL_MODE__ ? {
 } : __DATA__;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+/* call 等字段允许 <b>/<strong> 粗体（SKILL.md 契约：结论可含粗体强调）。
+   先整体 esc 再还原 b/strong，其余标签一律仍被转义，不放开 XSS 面。
+   （2026-10-29 修复：原实现用 esc() 全量转义，导致结论里的 <b> 显示成字面标签） */
+const richEsc = s => esc(s).replace(/&lt;(b|strong)&gt;([\s\S]*?)&lt;\/\1&gt;/g, '<$1>$2</$1>');
 const nf = n => { const v = (n == null ? 0 : n); return v >= 10000 ? ((v/10000).toFixed(2) + ' 万') : String(v); };
 const dur = s => { s = Math.round(s||0); return `${Math.floor(s/60)} 分 ${s%60} 秒`; };
 
@@ -927,9 +931,9 @@ if (wantReveal) {
 })();
 
 /* 结论 + 要点 */
-$('call').innerHTML = D.call ? esc(D.call) : '（数据不足以支撑结论，如实留空）';
+$('call').innerHTML = D.call ? richEsc(D.call) : '（数据不足以支撑结论，如实留空）';
 $('points').innerHTML = (D.points || []).length
-  ? D.points.map(p => `<li><span class="ts">${esc(p.t||'')}</span><span>${esc(p.text)}</span></li>`).join('')
+  ? D.points.map(p => `<li><span class="ts">${esc(p.t||'')}</span><span>${richEsc(p.text)}</span></li>`).join('')
   : '<li class="empty">无结构化要点</li>';
 
 /* 适配度 */
@@ -949,14 +953,14 @@ $('points').innerHTML = (D.points || []).length
   const dots = Array.from({length:5}, (_,i) =>
     `<i class="${i < Math.round(score) ? 'on' : ''}"></i>`).join('');
   const list = (arr,t) => (arr && arr.length)
-    ? `<div><h3>${t}</h3><ul>${arr.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
+    ? `<div><h3>${t}</h3><ul>${arr.map(x => `<li>${richEsc(x)}</li>`).join('')}</ul></div>` : '';
   $('fit').innerHTML = `
     <div class="top"><span class="verdict ${cls}">${esc(label)}</span>
       <span class="score" aria-label="匹配度 ${score}/5">${dots}</span>
       <span style="font-size:12.5px;color:var(--ink-3)">${esc(f.target||'')}</span></div>
-    <p style="margin:0;font-size:calc(var(--fs)*.96);color:var(--ink-2)">${esc(f.summary||'')}</p>
+    <p style="margin:0;font-size:calc(var(--fs)*.96);color:var(--ink-2)">${richEsc(f.summary||'')}</p>
     <div class="cols">${list(f.reasons,'为什么')}${list(f.requirements,'需要满足')}</div>
-    ${f.unknown ? `<div class="unk">不确定项：${esc(f.unknown)}</div>` : ''}`;
+    ${f.unknown ? `<div class="unk">不确定项：${richEsc(f.unknown)}</div>` : ''}`;
 })();
 
 /* 学习笔记 */
@@ -964,7 +968,7 @@ $('points').innerHTML = (D.points || []).length
   const secs = D.note_sections || [];
   $('notes').innerHTML = secs.length ? secs.map(s => `
     <div class="note"><h3>${esc(s.h)}</h3>
-      ${(s.items||[]).map(i => `<p><b>${esc(i.title)}</b>${i.text ? ' · ' + esc(i.text) : ''}</p>`).join('')}
+      ${(s.items||[]).map(i => `<p><b>${esc(i.title)}</b>${i.text ? ' · ' + richEsc(i.text) : ''}</p>`).join('')}
       ${s.text ? `<p>${esc(s.text)}</p>` : ''}
     </div>`).join('') : '<div class="empty">本次未生成学习笔记正文</div>';
 })();

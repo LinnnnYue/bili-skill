@@ -14,11 +14,61 @@ from pathlib import Path
 
 
 def parse_transcript(path: Path) -> list[dict]:
-    rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"\[(\d{2}:\d{2}(?::\d{2})?)\]\s*(.*)", line.strip())
+    """解析逐句稿，自动识别三种格式。
+
+    1. [MM:SS] 文本                              —— 简化稿 / frame_ocr.py 输出
+    2. SRT（序号 + HH:MM:SS,mmm --> ... + 文本）  —— transcribe.py 的 .srt
+    3. 纯文本（一行一句，无时间戳）                —— transcribe.py 的 .txt
+
+    纯文本无时间信息，t 留空但**句子必须保留** —— 否则 07 节会静默退回空态
+    （2026-10-29 实测：传 .txt 导致 07 只剩 30 字空态文案）。
+    """
+    text = path.read_text(encoding="utf-8")
+    suffix = path.suffix.lower()
+    rows: list[dict] = []
+
+    def _mmss(tc: str) -> str:
+        """时间码归一化：00:01:23,456 / 01:23,456 -> MM:SS（超 1 小时留 HH:MM:SS）。"""
+        tc = tc.split(",")[0].split(".")[0].strip()
+        parts = [p for p in tc.split(":") if p != ""]
+        try:
+            nums = [int(p) for p in parts]
+        except ValueError:
+            return tc
+        if len(nums) >= 3:
+            h, m, s = nums[-3], nums[-2], nums[-1]
+            return "%02d:%02d:%02d" % (h, m, s) if h else "%02d:%02d" % (m, s)
+        if len(nums) == 2:
+            return "%02d:%02d" % (nums[0], nums[1])
+        return tc
+
+    # --- 格式 2：SRT ---
+    if suffix == ".srt" or "-->" in text:
+        for blk in re.split(r"\n\s*\n", text.strip()):
+            lines = [l for l in blk.splitlines() if l.strip()]
+            ti = next((i for i, l in enumerate(lines) if "-->" in l), None)
+            if ti is None:
+                continue
+            start_tc = lines[ti].split("-->")[0].strip()
+            body = " ".join(lines[ti + 1:]).strip()
+            if body:
+                rows.append({"t": _mmss(start_tc), "text": body})
+        if rows:
+            return rows
+
+    # --- 格式 1：方括号时间戳 ---
+    for line in text.splitlines():
+        m = re.match(r"\[(\d{1,2}:\d{2}(?::\d{2})?)\]\s*(.*)", line.strip())
         if m and m.group(2):
-            rows.append({"t": m.group(1), "text": m.group(2)})
+            rows.append({"t": _mmss(m.group(1)), "text": m.group(2)})
+    if rows:
+        return rows
+
+    # --- 格式 3：纯文本兜底（无时间戳）---
+    for line in text.splitlines():
+        s = line.strip()
+        if s and not re.match(r"^\d+$", s):
+            rows.append({"t": "", "text": s})
     return rows
 
 
