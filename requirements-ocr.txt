@@ -1,0 +1,4 @@
+# 画面 OCR（无人声视频：宣传片 / 演示片 / 录屏）
+# 装完还需 ffmpeg（外部命令，见 README）
+rapidocr_onnxruntime>=1.3
+Pillow>=9.0

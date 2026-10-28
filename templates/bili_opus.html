@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light" data-palette="ink" data-scale="md">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>__TITLE__ · B站图文</title>
+<style>
+/* ═══ bili opus 图文模板 · 与报告同一套 token ═══
+   骨架同 bili_report_v4（左导航 / 右目录 / 窄栏），正文换成图文块；
+   图片带灯箱：点击放大 → 滚轮缩放 → 拖拽平移 → 点遮罩/ESC 关闭。 */
+:root{
+  --paper:#f7f7f5; --paper-2:#efefec; --surface:#ffffff;
+  --ink:#37352f; --ink-2:#5f5e58; --ink-3:#6b6a64;
+  --line:rgba(55,53,47,.09); --line-2:rgba(55,53,47,.18);
+  --accent:#2f6feb; --accent-2:#1a56c4; --accent-soft:#eaf1fd;
+  --signal:#ff4d00;
+  --code-bg:#1c1c1f; --code-ink:#e7e7ea;
+  --ok:#0b7a4b; --ok-bg:#e9f6ef; --warn:#8a5a00; --warn-bg:#fdf6e3;
+  --r-sm:4px; --r:6px; --r-lg:10px;
+  --fs:17px; --lh:1.78; --measure:46em;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --sans:'Microsoft YaHei UI','Microsoft YaHei','Segoe UI',system-ui,sans-serif;
+  --display:'Anton','Microsoft YaHei','Segoe UI Variable Display',system-ui,sans-serif;
+  --mono:'Cascadia Code',Consolas,Menlo,monospace;
+}
+html[data-theme="dark"]{
+  --paper:#191919; --paper-2:#232323; --surface:#202020;
+  --ink:#e9e9e7; --ink-2:#b8b7b2; --ink-3:#a5a49f;
+  --line:rgba(255,255,255,.1); --line-2:rgba(255,255,255,.18);
+  --accent:#7aa2ff; --accent-2:#a6c0ff; --accent-soft:#1b2436;
+  --code-bg:#111113;
+  --ok:#48d18d; --ok-bg:#12251b; --warn:#e8be5a; --warn-bg:#241f10;
+}
+html[data-palette="teal"]{--accent:#0f766e;--accent-2:#0b5f59;--accent-soft:#e7f5f2}
+html[data-palette="teal"][data-theme="dark"]{--accent:#4fd1c5;--accent-2:#7ee0d7;--accent-soft:#112624}
+html[data-palette="amber"]{--accent:#a35c00;--accent-2:#7d4600;--accent-soft:#fdf1e3}
+html[data-palette="amber"][data-theme="dark"]{--accent:#f0b45e;--accent-2:#f6cb8b;--accent-soft:#2a2013}
+html[data-scale="sm"]{--fs:15.5px;--measure:48em}
+html[data-scale="lg"]{--fs:19.5px;--measure:42em}
+
+*{box-sizing:border-box}
+html{overflow-x:clip}
+html,body{max-width:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+  font-size:var(--fs);line-height:var(--lh);letter-spacing:0;overflow-wrap:anywhere;
+  -webkit-font-smoothing:antialiased;transition:background-color .22s ease,color .22s ease}
+img{max-width:100%}
+::selection{background:var(--accent-soft);color:var(--accent-2)}
+
+/* 边缘环形进度（同报告模板） */
+/* ═══ 阅读进度 = 右侧滚动条 ═══（与报告模板同法）
+   滑块位置 = 阅读进度，滑块渐变 accent→signal，原生深灰滚动条全量覆盖。 */
+/* 必须二选一：一旦声明 scrollbar-width / scrollbar-color，Chrome 会切到标准 API
+   并**忽略** ::-webkit-scrollbar（渐变随之退化成纯色）。所以：
+   · Chrome/Edge/Safari → 走 ::-webkit-scrollbar（支持渐变）
+   · Firefox          → 走标准 API（不支持渐变，但至少不突兀） */
+html{color-scheme:light}
+html[data-theme="dark"]{color-scheme:dark}
+@supports not selector(::-webkit-scrollbar) {
+  html{scrollbar-width:thin;scrollbar-color:var(--accent) transparent}
+  html[data-theme="dark"]{scrollbar-color:var(--signal) transparent}
+}
+::-webkit-scrollbar{width:12px;height:12px;background:var(--paper)}
+::-webkit-scrollbar-track{background:var(--paper)}
+::-webkit-scrollbar-track-piece{background:var(--paper)}
+::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg,var(--accent),var(--signal));
+  background-clip:padding-box;border:3px solid transparent;border-radius:99px;min-height:48px}
+::-webkit-scrollbar-thumb:hover{
+  background:linear-gradient(180deg,var(--accent-2),var(--signal));background-clip:padding-box}
+::-webkit-scrollbar-corner{background:transparent}
+.side::-webkit-scrollbar,.toc::-webkit-scrollbar,pre::-webkit-scrollbar{width:6px;height:6px}
+.side::-webkit-scrollbar-thumb,.toc::-webkit-scrollbar-thumb,pre::-webkit-scrollbar-thumb{
+  background:var(--line-2);background-clip:border-box;border:0;border-radius:99px;min-height:32px}
+.side::-webkit-scrollbar-thumb:hover,.toc::-webkit-scrollbar-thumb:hover,
+pre::-webkit-scrollbar-thumb:hover{background:var(--ink-3);background-clip:border-box}
+@media print{::-webkit-scrollbar{width:0;height:0}}
+
+.layout{max-width:1400px;margin:0 auto;display:grid;
+  grid-template-columns:272px minmax(0,1fr) 236px;padding:0 24px}
+
+/* 左栏 */
+.side{position:sticky;top:0;height:100vh;overflow-y:auto;padding:30px 24px 64px 0;
+  align-self:start;border-right:1px solid var(--line);scrollbar-width:thin}
+.brk{font-family:var(--display);font-size:46px;line-height:.86;color:var(--ink);margin:0 0 8px}
+.brk i{font-style:normal;color:var(--signal)}
+.side .tag{display:block;font-size:11px;letter-spacing:.24em;color:var(--ink-3);
+  margin-bottom:28px;text-transform:uppercase}
+.side .grp{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:.2em;
+  color:var(--ink-3);margin:28px 0 10px;font-weight:700;text-transform:uppercase}
+.side .grp::before{content:"";width:16px;height:1px;background:var(--line-2)}
+.side a{position:relative;display:block;padding:9px 13px;margin:2px 0;border-radius:6px;
+  font-size:14.5px;line-height:1.5;color:var(--ink-2);text-decoration:none;
+  transition:color .18s ease,background-color .18s ease}
+.side a::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:3px;border-radius:2px;
+  background:var(--accent);opacity:0;transform:scaleY(.25);transform-origin:center;
+  transition:opacity .2s,transform .28s var(--ease-out)}
+.side a:hover{background:color-mix(in oklab,var(--accent) 8%,transparent);color:var(--ink)}
+.side a.on{background:linear-gradient(90deg,color-mix(in oklab,var(--accent) 14%,transparent),transparent 72%);
+  color:var(--ink);font-weight:700}
+.side a.on::before{opacity:1;transform:scaleY(1)}
+
+/* 正文 */
+main{padding:42px 34px 120px;min-width:0}
+article{max-width:var(--measure);margin:0 auto}
+.kicker{font-family:var(--display);font-size:13px;letter-spacing:.22em;color:var(--accent-2);
+  text-transform:uppercase}
+h1{font-size:clamp(30px,4.4vw,52px);line-height:1.14;font-weight:800;letter-spacing:-.02em;
+  margin:12px 0 18px;text-wrap:balance}
+.byline{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:13px;
+  color:var(--ink-3);margin-bottom:26px}
+.byline b{color:var(--ink-2);font-weight:600}
+.byline .sep{color:var(--line-2)}
+h2{position:relative;display:flex;align-items:baseline;gap:12px;margin:64px 0 16px;
+  padding-top:26px;border-top:1px solid var(--line);font-size:clamp(21px,2.4vw,26px);
+  font-weight:800;letter-spacing:-.015em;scroll-margin-top:24px}
+h2 .num{font-family:var(--display);font-size:20px;letter-spacing:.05em;color:var(--accent-2)}
+h2::after{content:"";position:absolute;left:0;top:0;height:2px;width:100%;
+  background:linear-gradient(90deg,var(--signal),var(--accent) 42%,transparent 96%);opacity:.85}
+h3{font-size:calc(var(--fs)*1.04);font-weight:700;margin:30px 0 8px;letter-spacing:-.01em}
+p{margin:12px 0}
+a{color:var(--accent-2)}
+
+/* 图文块 */
+.quote{margin:20px 0;padding:16px 20px;border-left:3px solid var(--accent);
+  background:var(--accent-soft);border-radius:0 var(--r) var(--r) 0;color:var(--ink-2)}
+.callout{margin:20px 0;padding:15px 18px;border-radius:var(--r);border:1px solid var(--line);
+  background:var(--surface)}
+.callout .k{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent-2);
+  font-weight:700;margin-bottom:6px}
+figure{margin:26px 0}
+figure .frame{position:relative;border-radius:var(--r-lg);overflow:hidden;border:1px solid var(--line);
+  background:var(--paper-2);cursor:zoom-in}
+figure img{display:block;width:100%;height:auto;transition:transform .3s var(--ease-out)}
+figure .frame:hover img{transform:scale(1.012)}
+figure figcaption{margin-top:8px;font-size:12.5px;color:var(--ink-3);display:flex;
+  justify-content:space-between;gap:12px}
+figure .zoom{position:absolute;right:10px;bottom:10px;font-size:11px;letter-spacing:.1em;
+  padding:3px 8px;border-radius:4px;background:rgba(0,0,0,.55);color:#fff;opacity:0;
+  transition:opacity .2s ease}
+figure .frame:hover .zoom{opacity:1}
+pre{background:var(--code-bg);color:var(--code-ink);border-radius:var(--r-lg);padding:14px 16px;
+  overflow:auto;font-family:var(--mono);font-size:13px;line-height:1.7}
+code{font-family:var(--mono);font-size:.92em;background:var(--paper-2);padding:1px 5px;border-radius:3px}
+pre code{background:none;padding:0}
+table{width:100%;border-collapse:collapse;font-size:calc(var(--fs)*.9);margin:14px 0}
+th,td{border-bottom:1px solid var(--line);padding:9px 11px;text-align:left}
+th{background:var(--paper-2);font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-3)}
+
+/* 右目录 */
+.toc{position:sticky;top:0;height:100vh;overflow-y:auto;padding:42px 0 56px 26px;
+  align-self:start;font-size:14px;scrollbar-width:thin}
+.toc .h{display:flex;align-items:center;gap:9px;font-size:11px;letter-spacing:.26em;
+  color:var(--ink-3);margin-bottom:18px;font-weight:700;text-transform:uppercase}
+.toc .h::after{content:"";flex:1;height:1px;background:var(--line)}
+.toc a{position:relative;display:block;padding:5px 0 5px 15px;color:var(--ink-2);
+  text-decoration:none;line-height:1.66}
+.toc a::before{content:"";position:absolute;left:0;top:2px;bottom:2px;width:2px;background:var(--line)}
+.toc a.on{color:var(--accent-2);font-weight:700}
+.toc a.on::before{background:var(--accent)}
+.toc a.l3{padding-left:29px;font-size:13px;color:var(--ink-3)}
+
+/* 工具栏 */
+.tools{position:fixed;right:18px;bottom:18px;z-index:110;display:flex;gap:3px;padding:4px;
+  background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);
+  box-shadow:0 6px 24px rgba(0,0,0,.08)}
+.tools button{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:4px;
+  background:transparent;color:var(--ink-2);cursor:pointer;transition:background-color .14s,transform .14s}
+.tools button:hover{background:var(--paper-2);color:var(--ink)}
+.tools button:active{transform:scale(.93)}
+.tools svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+
+/* ═══ 灯箱 ═══ */
+.lb{position:fixed;inset:0;z-index:200;display:none;background:rgba(10,10,12,.9);
+  backdrop-filter:blur(6px);cursor:zoom-out}
+.lb.on{display:block}
+.lb .stage{position:absolute;inset:0;overflow:hidden;cursor:grab}
+.lb .stage.drag{cursor:grabbing}
+.lb img{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(1);
+  max-width:none;will-change:transform;user-select:none;-webkit-user-drag:none}
+.lb .bar{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;
+  gap:14px;padding:12px;font-size:12.5px;color:#e7e7ea;background:linear-gradient(transparent,rgba(0,0,0,.55))}
+.lb .bar span{font-variant-numeric:tabular-nums}
+.lb .bar button{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
+  color:#fff;border-radius:5px;padding:3px 10px;font-size:12px;cursor:pointer}
+.lb .bar button:hover{background:rgba(255,255,255,.22)}
+.lb .hint{position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:12px;
+  color:rgba(255,255,255,.72);letter-spacing:.04em;pointer-events:none}
+/* 关闭按钮（右上角）与前后切换（左右居中）——都放在 .lb 层，不在 .stage 内，
+   这样点按钮不会触发 stage 的拖拽/关闭判定 */
+.lb .close{position:absolute;top:16px;right:18px;width:40px;height:40px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:17px;line-height:1;
+  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#fff;
+  cursor:pointer;z-index:3;transition:background .18s ease,transform .18s ease}
+.lb .close:hover{background:rgba(255,255,255,.26);transform:scale(1.07)}
+.lb .nav{position:absolute;top:50%;transform:translateY(-50%);width:46px;height:46px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1;
+  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:#fff;
+  cursor:pointer;z-index:3;transition:background .18s ease,opacity .18s ease}
+.lb .nav:hover{background:rgba(255,255,255,.26)}
+.lb .nav[disabled]{opacity:.25;cursor:default}
+.lb .prev{left:18px} .lb .next{right:18px}
+.lb .count{position:absolute;top:24px;left:22px;font-size:12.5px;color:rgba(255,255,255,.66);
+  font-variant-numeric:tabular-nums;letter-spacing:.08em;z-index:3;pointer-events:none}
+@media (max-width:640px){
+  .lb .nav{width:38px;height:38px;font-size:19px}
+  .lb .prev{left:8px} .lb .next{right:8px}
+  .lb .close{top:10px;right:10px;width:36px;height:36px}
+  .lb .count{top:16px;left:12px}
+}
+@media (max-width:1180px){
+  .layout{grid-template-columns:248px minmax(0,1fr)}
+  .toc{display:none}
+}
+@media (max-width:860px){
+  .layout{grid-template-columns:minmax(0,1fr);padding:0 16px}
+  .side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line);
+    padding:18px 0 6px}
+  .side nav{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:8px}
+  .side nav::-webkit-scrollbar{display:none}
+  .side a{white-space:nowrap;font-size:13.5px;background:var(--paper-2)}
+  .side .grp,.side .tag{display:none}
+  main{padding:24px 0 90px}
+  article{max-width:none}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+}
+@media print{.lb,.tools,.side,.toc{display:none}.layout{display:block}
+  main{padding:0}article{max-width:none}}
+</style>
+</head>
+<body>
+<script>
+window.addEventListener('error', function (e) {
+  if (document.getElementById('_errbar')) return;
+  var d = document.createElement('div');
+  d.id = '_errbar';
+  d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99999;background:#c0392b;color:#fff;'
+    + 'font:12px/1.5 ui-monospace,monospace;padding:8px 12px;white-space:pre-wrap;max-height:40vh;overflow:auto';
+  d.textContent = '页面脚本出错（本行信息可直接反馈给维护者）：'
+    + (e.message || e.error) + ' @ 行 ' + (e.lineno || '?') + ':' + (e.colno || '?');
+  document.body.appendChild(d);
+}, true);
+</script>
+
+<div class="layout">
+  <aside class="side">
+    <div class="brk">BR<i>.</i></div>
+    <span class="tag">Opus · 图文</span>
+    <nav id="nav" aria-label="章节导航"></nav>
+  </aside>
+
+  <main>
+    <article>
+      <header>
+        <div class="kicker" id="kicker">Bilibili · 图文</div>
+        <h1 id="title">加载中…</h1>
+        <div class="byline" id="byline"></div>
+      </header>
+      <div id="body"></div>
+      <footer style="margin-top:56px;padding-top:18px;border-top:1px solid var(--line);
+        font-size:12.5px;color:var(--ink-3);display:flex;justify-content:space-between;gap:10px">
+        <span>由 bili 技能生成 · 单文件离线 · 可转发</span>
+        <span id="genat">—</span>
+      </footer>
+    </article>
+  </main>
+
+  <aside class="toc" aria-label="本页目录">
+    <div class="h">Contents</div>
+    <div id="toclist"></div>
+  </aside>
+</div>
+
+<div class="tools" role="toolbar" aria-label="阅读设置">
+  <button id="btnTheme" title="深浅" aria-label="切换深浅">
+    <svg viewBox="0 0 24 24"><path d="M12 3v2M12 19v2M5 12H3m18 0h-2M6.3 6.3 4.9 4.9m14.2 14.2-1.4-1.4M17.7 6.3l1.4-1.4M4.9 19.1l1.4-1.4"/><circle cx="12" cy="12" r="4"/></svg>
+  </button>
+  <button id="btnPalette" title="配色" aria-label="切换配色">
+    <svg viewBox="0 0 24 24"><circle cx="9" cy="9" r="5"/><circle cx="15" cy="15" r="5"/></svg>
+  </button>
+  <button id="btnScale" title="字号" aria-label="调整字号">
+    <svg viewBox="0 0 24 24"><path d="M4 19V5h7M4 12h5M14 19v-9h6M14 14h6"/></svg>
+  </button>
+</div>
+
+<div class="lb" id="lb" aria-hidden="true">
+  <div class="stage" id="stage"><img id="lbimg" alt=""></div>
+  <div class="count" id="lbCount"></div>
+  <button class="close" id="lbClose" type="button" aria-label="关闭（Esc）" title="关闭（Esc）">✕</button>
+  <button class="nav prev" id="lbPrev" type="button" aria-label="上一张（←）" title="上一张（←）">‹</button>
+  <button class="nav next" id="lbNext" type="button" aria-label="下一张（→）" title="下一张（→）">›</button>
+  <div class="hint">滚轮缩放 · 拖拽查看细节 · ←/→ 切换 · 点空白或 ✕ 关闭</div>
+  <div class="bar">
+    <button id="zoomOut" type="button">−</button>
+    <span id="zoomVal">100%</span>
+    <button id="zoomIn" type="button">+</button>
+    <button id="reset" type="button">复位</button>
+  </div>
+</div>
+
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+/* 阅读设置 */
+const root = document.documentElement, q = new URLSearchParams(location.search);
+const PALETTES = ['ink','teal','amber'], SCALES = ['sm','md','lg'];
+function lsGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
+function lsSet(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
+root.dataset.theme = q.get('theme') || lsGet('bili.theme') || 'light';
+root.dataset.palette = lsGet('bili.palette') || 'ink';
+root.dataset.scale = lsGet('bili.scale') || 'md';
+$('btnTheme').onclick = () => { root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('bili.theme', root.dataset.theme); };
+$('btnPalette').onclick = () => { const i = PALETTES.indexOf(root.dataset.palette);
+  root.dataset.palette = PALETTES[(i+1)%PALETTES.length];
+  localStorage.setItem('bili.palette', root.dataset.palette); };
+$('btnScale').onclick = () => { const i = SCALES.indexOf(root.dataset.scale);
+  root.dataset.scale = SCALES[(i+1)%SCALES.length];
+  localStorage.setItem('bili.scale', root.dataset.scale); };
+
+/* 头部 */
+(function head(){
+  const m = D.meta || {};
+  document.title = (m.title || 'B站图文') + ' · B站图文';
+  $('title').textContent = (m.title || '（无标题）').replace(/\.{2,}/g, '…');
+  const bits = [];
+  if (m.author) bits.push('<b>' + esc(m.author) + '</b>');
+  if (m.published) bits.push(esc(m.published));
+  if (m.words) bits.push(m.words + ' 字');
+  if (m.images) bits.push(m.images + ' 图');
+  if (m.url) bits.push('<a href="' + esc(m.url) + '" target="_blank" rel="noopener">原文 ↗</a>');
+  $('byline').innerHTML = bits.join('<span class="sep">/</span>');
+  if (m.kind) $('kicker').textContent = m.kind;
+})();
+
+/* 正文渲染 */
+const BLOCK = {
+  p: b => `<p>${b.html || esc(b.text || '')}</p>`,
+  h3: b => `<h3 id="${b.id || ''}">${esc(b.text || '')}</h3>`,
+  quote: b => `<blockquote class="quote">${b.html || esc(b.text || '')}</blockquote>`,
+  callout: b => `<div class="callout"><div class="k">${esc(b.k || 'Note')}</div>${esc(b.text || '')}</div>`,
+  code: b => `<pre><code>${esc(b.text || '')}</code></pre>`,
+  table: b => `<table><thead><tr>${(b.head || []).map(h => `<th>${esc(h)}</th>`).join('')}</tr></thead>
+    <tbody>${(b.rows || []).map(r => `<tr>${r.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`,
+  img: b => `<figure><div class="frame" data-src="${esc(b.src)}"><img src="${esc(b.src)}"
+      alt="${esc(b.cap || '')}" loading="lazy"><span class="zoom">点击放大</span></div>
+    <figcaption><span>${esc(b.cap || '')}</span><span>${b.note ? esc(b.note) : ''}</span></figcaption></figure>`
+};
+
+(function body(){
+  const secs = D.sections || [];
+  const out = [];
+  secs.forEach((s, i) => {
+    const num = String(i + 1).padStart(2, '0');
+    out.push(`<h2 id="s${i+1}"><span class="num">${num}</span>${esc(s.h)}</h2>`);
+    (s.blocks || []).forEach(b => {
+      const fn = BLOCK[b.type];
+      if (fn) out.push(fn(b));
+    });
+  });
+  $('body').innerHTML = out.join('');
+
+  // 左导航 + 右目录
+  $('nav').innerHTML = secs.map((s, i) =>
+    `<a href="#s${i+1}" class="${i === 0 ? 'on' : ''}">${esc(s.h)}</a>`).join('');
+  const toc = [];
+  secs.forEach((s, i) => {
+    toc.push(`<a href="#s${i+1}">${esc(s.h)}</a>`);
+    (s.blocks || []).filter(b => b.type === 'h3' && b.text).forEach(b => {
+      toc.push(`<a class="l3" href="#${b.id || ''}">${esc(b.text)}</a>`);
+    });
+  });
+  $('toclist').innerHTML = toc.join('');
+})();
+
+/* 灯箱：拖拽只平移、绝不关闭；关闭只认「点空白 / 右上角 ✕ / Esc」；支持 ←/→ 前后切换
+   —— 修 bug：原来 setPointerCapture 会把后续 click 的 target 重定向成 stage，
+      于是「拖一下」就被当成「点遮罩」直接退出。现用 moved 标志 + elementFromPoint 双保险。 */
+(function lightbox(){
+  const lb = $('lb'), stage = $('stage'), img = $('lbimg');
+  const frames = [...document.querySelectorAll('.frame')];
+  const count = $('lbCount'), prev = $('lbPrev'), next = $('lbNext');
+  let idx = -1, scale = 1, tx = 0, ty = 0;
+  let dragging = false, moved = false, downX = 0, downY = 0, sx = 0, sy = 0;
+  const apply = () => {
+    img.style.transform = `translate(calc(-50% + ${tx}px), calc(-50% + ${ty}px)) scale(${scale})`;
+    $('zoomVal').textContent = Math.round(scale * 100) + '%';
+  };
+  const reset = () => { scale = 1; tx = ty = 0; apply(); };
+  function paint(i){
+    if (!frames.length) return;
+    idx = ((i % frames.length) + frames.length) % frames.length;
+    const f = frames[idx];
+    img.src = f.dataset.src;
+    img.alt = ((f.querySelector('img') || {}).alt) || '';
+    reset();
+    const multi = frames.length > 1;
+    if (count) { count.textContent = (idx + 1) + ' / ' + frames.length; count.style.display = multi ? '' : 'none'; }
+    if (prev) { prev.style.display = multi ? '' : 'none'; prev.disabled = !multi; }
+    if (next) { next.style.display = multi ? '' : 'none'; next.disabled = !multi; }
+  }
+  function open(i){
+    paint(i < 0 ? 0 : i);
+    lb.classList.add('on'); lb.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function close(){
+    lb.classList.remove('on'); lb.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    img.removeAttribute('src');
+  }
+  document.addEventListener('click', e => {
+    const f = e.target.closest('.frame');
+    if (f) open(frames.indexOf(f));
+  });
+  /* 点空白关闭：① 拖动过就不算点击 ② 用坐标反查，点在图上（含双击）一律不关 */
+  stage.addEventListener('click', e => {
+    if (moved) { moved = false; return; }
+    if (document.elementFromPoint(e.clientX, e.clientY) === stage) close();
+  });
+  lb.addEventListener('click', e => { if (e.target === lb) close(); });
+  if ($('lbClose')) $('lbClose').onclick = e => { e.stopPropagation(); close(); };
+  if (prev) prev.onclick = e => { e.stopPropagation(); paint(idx - 1); };
+  if (next) next.onclick = e => { e.stopPropagation(); paint(idx + 1); };
+  addEventListener('keydown', e => {
+    if (!lb.classList.contains('on')) return;
+    if (e.key === 'Escape') close();
+    else if (e.key === 'ArrowLeft') paint(idx - 1);
+    else if (e.key === 'ArrowRight') paint(idx + 1);
+    else if (e.key === '0') reset();
+  });
+  // 滚轮缩放（以光标为锚点）
+  stage.addEventListener('wheel', e => {
+    if (!lb.classList.contains('on')) return;
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    const mx = e.clientX - r.left - r.width / 2;
+    const my = e.clientY - r.top - r.height / 2;
+    const k = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const ns = Math.min(6, Math.max(0.3, scale * k));
+    const ratio = ns / scale;
+    tx = mx - (mx - tx) * ratio;
+    ty = my - (my - ty) * ratio;
+    scale = ns; apply();
+  }, {passive: false});
+  // 拖拽平移：拖多远都不关闭
+  stage.addEventListener('pointerdown', e => {
+    if (!lb.classList.contains('on')) return;
+    dragging = true; moved = false;
+    downX = e.clientX; downY = e.clientY;
+    sx = e.clientX - tx; sy = e.clientY - ty;
+    stage.classList.add('drag');
+    try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    if (Math.abs(e.clientX - downX) > 4 || Math.abs(e.clientY - downY) > 4) moved = true;
+    tx = e.clientX - sx; ty = e.clientY - sy; apply();
+  });
+  const endDrag = e => {
+    dragging = false; stage.classList.remove('drag');
+    try { stage.releasePointerCapture(e.pointerId); } catch (_) {}
+  };
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
+  $('zoomIn').onclick = e => { e.stopPropagation(); scale = Math.min(6, scale * 1.25); apply(); };
+  $('zoomOut').onclick = e => { e.stopPropagation(); scale = Math.max(0.3, scale / 1.25); apply(); };
+  $('reset').onclick = e => { e.stopPropagation(); reset(); };
+  img.addEventListener('dblclick', e => { e.stopPropagation(); scale = scale > 1 ? 1 : 2; tx = ty = 0; apply(); });
+})();
+
+/* 边缘进度 + 目录高亮 */
+const secs = [...document.querySelectorAll('h2[id]')];
+const navs = [...document.querySelectorAll('#nav a')];
+const tocs = [...document.querySelectorAll('#toclist a')];
+/* 阅读进度已交给滚动条本身，此处不再绘制 */
+addEventListener('scroll', () => {
+  const h = document.documentElement;
+  let cur = secs[0];
+  for (const s of secs) if (s.getBoundingClientRect().top < 140) cur = s;
+  navs.forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + cur.id));
+  let ct = null;
+  for (const a of tocs) { const t = document.getElementById(a.getAttribute('href').slice(1));
+    if (t && t.getBoundingClientRect().top < 150) ct = a; }
+  tocs.forEach(a => a.classList.toggle('on', a === ct));
+}, {passive: true});
+
+$('genat').textContent = '生成于 ' + new Date().toLocaleString('zh-CN');
+</script>
+</body>
+</html>
