@@ -813,7 +813,10 @@ if (__TPL_MODE__) {
     {id:'call',    sec:'01 三十秒版',   min:40},
     {id:'fit',     sec:'02 适配度评估', min:40},
     {id:'notes',   sec:'03 学习笔记',   min:80},
-    {id:'stats',   sec:'04 数据画像',   min:24},
+    /* 04 用字符数判断会误报：数据量小的视频（如播放 916），
+       6 个指标合计才 23 字符，差 1 字就被判空壳。
+       改用「有几张指标卡有值」——这才是该板块"有内容"的真实判据。 */
+    {id:'stats',   sec:'04 数据画像',   min:10, sub:'.card .v', minCount:4},
     {id:'cmtlist', sec:'05 评论区',     min:40},
     {id:'dmlist',  sec:'06 弹幕',       min:8},
     {id:'trbody',  sec:'07 逐句稿',     min:8},
@@ -829,7 +832,16 @@ if (__TPL_MODE__) {
       var old = el.querySelectorAll('.audit-flag');
       for (var i = 0; i < old.length; i++) { el.removeChild(old[i]); }
       var txt = (el.textContent || el.innerText || '').replace(/\s+/g, '').trim();
-      if (txt.length >= c.min) return;
+      if (c.sub) {
+        /* 子元素判据：数「有内容的子元素个数」，避免数字短就误判空壳 */
+        var kids = el.querySelectorAll(c.sub), filled = 0;
+        for (var j = 0; j < kids.length; j++) {
+          if ((kids[j].textContent || '').replace(/\s+/g, '')) filled++;
+        }
+        if (filled >= (c.minCount || 1)) return;
+      } else if (txt.length >= c.min) {
+        return;
+      }
       var b = document.createElement('div');
       b.className = 'audit-flag';
       b.style.cssText = 'background:#fef3c7;color:#78350f;font:12.5px/1.7 var(--sans);'
