@@ -112,7 +112,7 @@ section{position:relative;scroll-margin-top:24px}
 h2{display:flex;align-items:baseline;gap:14px;
   margin:76px 0 16px;padding-top:30px;border-top:1px solid var(--line);
   font-size:clamp(22px,2.6vw,29px);line-height:1.25;letter-spacing:-.022em;font-weight:800}
-h2 .num{color:var(--accent-2);font-weight:700;
+h2 .num{color:var(--paper);font-weight:700;   /* 序号是「色块反白」：字取背景纸色，不能用 accent-2 同色系 */
   font-variant-numeric:tabular-nums;transform:translateY(-3px)}
 h2 .ghost{position:absolute;right:0;top:-14px;font-size:clamp(64px,10vw,116px);
   font-weight:800;color:var(--ink);pointer-events:none;
@@ -338,6 +338,10 @@ html.reveal .rv{transition:opacity .5s var(--ease-out),transform .5s var(--ease-
   .codebox{border:1px solid #ccc}
   .codebox .body{max-height:none}
   h2{break-after:avoid}
+  /* 章节号色块：打印一律黑底白字。dark 主题的 accent 是亮金 #f0b45e，
+     而打印强制 --paper:#fff ⇒ 白字压亮金读不出。这里锁死黑白。 */
+  h2 .num{background:#1a1a18!important;color:#fff!important;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 
 
@@ -493,7 +497,9 @@ html:not(.anim) #dmfield{display:none}
 .toc a.l3{padding-left:29px;font-size:13px;color:var(--ink-3);line-height:1.6}
 .toc a.l3.on{color:var(--accent-2)}
 /* 章节号/水印 + 正文链接下划线扫出 */
-h2 .num{font-family:var(--display);font-size:16px;letter-spacing:.05em;color:var(--accent-2)}
+h2 .num{font-family:var(--display);font-size:16px;letter-spacing:.05em;
+  background:var(--accent);color:var(--paper);
+  white-space:nowrap;flex:0 0 auto}   /* 色块上的字必须是纸色（深底浅字/亮底深字自动反色），accent-2 会与底色糊成一片；nowrap+不收缩防止窄栏把 "02" 折成竖排 */
 h2 .ghost{font-family:var(--display);opacity:.07;letter-spacing:-.03em}
 .byline a{position:relative}
 .byline a::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:1px;
