@@ -45,6 +45,72 @@ description: B 站一站式（视频/图文/动态/opus）：统一入口，取�
    （V6 里 `@media (prefers-reduced-motion){.dm{display:none!important}}` 会整段隐藏真实弹幕记录，
     2026-10-28 回写时未搬，原因见 WORKLOG ROUND 02 · WB。）
 
+
+## 〇·补 · 两层产物：给人读 vs 给模型读
+
+2026-10-29 借鉴 `dsh-video-storyboard`（SAOS-3624）后确立的分工。**两种消费者，两种产物，别混用**：
+
+| 层 | 脚本 | 产物 | 消费者 | 规模 |
+|---|---|---|---|---|
+| **速览层** | `scripts/brief.py` | `brief.md`（1–5 KB 纯文本清单） | **模型自己咽下去** | ~1.4K token / 12 段 |
+| 报告层 | `scripts/build_report.py` | `report.html` + `note.md` | **人看着读** | 200+ KB |
+
+**判据**：如果下一步是这个 agent 自己要基于视频内容做判断/写代码/回答，先跑 `brief.py`；如果要交给主上阅读，才跑 `build_report.py`。**不要为了「了解视频」而把 200 KB 的 HTML 读进上下文**——那是 80 倍浪费。
+
+```bash
+# 速览层（省 token）
+python "$SKILL/scripts/brief.py" \
+  --transcript tmp_bili_extract/transcript/xxx.srt \
+  --data tmp_bili_extract/report_data.json \
+  --segments 12 --detail med --out brief.md
+```
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `--segments` | 12 | 切几段（对齐 storyboard 的 9–16 格） |
+| `--detail` | `med` | 每段台词预算：`low` 60 / `med` 120 / `high` 400 字 |
+
+实测压缩比（47 分钟课，9700 字逐句稿）：
+```
+原稿        6467 token
+brief low    ~850 token   (7.6×)
+brief med   ~1330 token   (4.9×)
+brief high  ~3570 token   (1.8×)
+```
+
+### 从 storyboard 吸收的三条原则（已写进 brief.py）
+
+1. **清单只给原材料，不下结论**
+   不说「这是高潮」「这里在讲安装」，只给时间、段长、台词原文。判断是调用方的事。
+   实现：`brief.py` 输出里没有任何形容词或总结句。
+
+2. **每加一行都要能说出它挡掉了什么误判**
+   说不出来就不加。这条挡住了「加一堆漂亮元数据」的冲动。
+
+3. **数字不可信时要说出来**
+   宁可自曝不确定，也不给一个会被误用的数字。
+   实现：无 SRT 时输出 `!! timestamps are ESTIMATED`；某段 <3 秒时输出
+   `!! segments N span <3s — text may be truncated by the cut, not by content`。
+
+### 另一条工程教训（本轮踩的）
+
+**写 Python 正则时不要在字符串里写双反斜杠。**
+本轮 `brief.py` 里误写成 `re.split(r"\n\\s*\n", ...)`，导致：
+- Windows 的 SRT 是 **CRLF**，`\r\n` 匹配不上 → 619 个块被当成 1 个块
+- 47 分钟视频只切出 1 段，且输出全是字面 `\n`
+
+正确写法：`re.split(r"\r?\n\s*\r?\n", text)`。**SRT 一律先按 \r?\n 处理行尾。**
+
+### 什么时候该直接用 dsh-video-storyboard 而不是 bili 技能
+
+| 场景 | 用谁 |
+|---|---|
+| 视频内容**全在画面上**（演示、录屏、宣传片、无旁白） | **storyboard**（bili 抓不到画面） |
+| 需要**极省**地理解（<2K token 看完整片） | **storyboard** |
+| 需要**深度解析 + 评论区 + 弹幕 + 可交付报告** | **bili 技能** |
+| 中文长讲座、要逐句核对原话 | **bili 技能**（ASR 逐句稿更完整） |
+| 两者都要 | 先 storyboard 摸清结构，再 bili 出报告 |
+
 ## 一、路由表
 
 | 用户诉求 | 走哪条 | 产物 |
