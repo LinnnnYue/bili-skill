@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>__TITLE__</title>
+<style>
+/* ══════════════════════════════════════════════════════════════════════
+   bili_report_read · v3「时序卷轴」/ The Timecode Scroll
+   2026-10-29 · 主上第三稿：完全自由 · 推翻重来
+
+   ── 设计命题 ──
+   视频与文章的根本差别：视频有不可逆的时间轴。
+   所以解读不该把时间压平成文字，而应让人能在这条轴上自由进出。
+
+   ── 因此本版只有一个核心概念 ──
+   时间轴 = 页面骨架。
+
+   ① 左侧时间轨：固定贯穿全页，31 个刻度＝内容锚点，游标随滚动走进视频
+   ② 内容时间锚定：每张卡带真实时间码，论证层按时间顺序
+   ③ 朱砂一点：全身唯一彩色，其余纯灰阶 —— 让内容说话，装饰闭嘴
+
+   ── 与 v1/v2 的决裂 ──
+   v1 是「窄栏文档」，v2 是「杂志排版」——两者都还在回答
+   「怎么把文章排好看」。v3 回答的是另一个问题：
+   「怎么让人感觉到自己在看一段视频」。
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root{
+  --paper:#ffffff;
+  --paper-2:#fafaf9;
+  --paper-3:#f3f2f0;
+  --ink:#0d0d0d;
+  --ink-2:#464646;
+  --ink-3:#8a8a8a;
+  --ink-4:#bdbdbd;
+  --line:rgba(13,13,13,.10);
+  --line-2:rgba(13,13,13,.055);
+  --red:#c1272d;
+  --red-soft:rgba(193,39,45,.07);
+  --serif:"Source Han Serif SC","Noto Serif SC","Songti SC","SimSun","STSong",serif;
+  --sans:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Segoe UI",system-ui,sans-serif;
+  --mono:"Cascadia Code","Consolas","SF Mono",ui-monospace,monospace;
+  --measure:720px;
+}
+html[data-theme="dark"]{
+  --paper:#0d0d0d;
+  --paper-2:#151515;
+  --paper-3:#1d1d1d;
+  --ink:#f5f4f2;
+  --ink-2:#c0bfbd;
+  --ink-3:#7e7c79;
+  --ink-4:#4a4947;
+  --line:rgba(245,244,242,.14);
+  --line-2:rgba(245,244,242,.07);
+  --red:#ff5f63;
+  --red-soft:rgba(255,95,99,.09);
+}
+html{color-scheme:light;-webkit-text-size-adjust:100%}
+html[data-theme="dark"]{color-scheme:dark}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:var(--paper);color:var(--ink);
+  font-family:var(--sans);font-size:17px;line-height:1.9;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  overflow-x:clip;
+}
+
+
+/* ═════════ 主内容 ═════════ */
+/* v11：删掉左侧竖轴后，内容恢复真居中（原来要给 76px 轨道让位） */
+.frame{
+  max-width:var(--measure);margin:0 auto;
+  padding:0 clamp(20px,4vw,44px) 130px;
+}
+/* 声纹带随滚动常驻：它本身就是导航，滚走了就失去意义。
+   收起时压高度（--rb-h 变小），避免长期占用视口。 */
+/* ── 声纹带本体（v11：删竖轴时被误删，此处补回并压薄）──
+   一条横带同时承载声音与弹幕两层信号，是页面唯一的时间指示器。
+   高度：常态 clamp(40,5.6vh,56)，收起 clamp(22,2.8vh,30)。 */
+/* v13：高度不写死，交给 aspect-ratio = viewBox 比例（1000:80 = 25:2）。
+     这样横向缩放与纵向缩放恒等，波形不会被压扁或拉高。 */
+.ribbon{position:relative;aspect-ratio:25 / 2;width:100%;max-height:68px;overflow:hidden}
+/* SVG 用 absolute 填满父级 —— 用 height:100% 会与父级的 clamp(vh) 形成尺寸循环，
+   导致父级高度被 SVG 的 viewBox 比例反推撑开（实测内联 height:26px 都不生效）。 */
+.ribbon svg{position:absolute;inset:0;display:block;width:100%;height:100%}
+.ribbon path.audio{fill:var(--ink);opacity:.18}
+.ribbon path.dm{fill:var(--red);opacity:.62}
+.ribbon path.line{fill:none;stroke:var(--ink-3);stroke-width:.8;opacity:.5}
+.ribbon .axis{fill:none;stroke:var(--line);stroke-width:1}
+.ribbon .res{fill:var(--red);opacity:.9}
+.ribbon .divt{fill:none;stroke:var(--red);stroke-width:1;opacity:.55}
+.ribbon-head{position:absolute;top:0;bottom:0;width:1.5px;background:var(--red);
+  transition:left .18s linear;pointer-events:none;opacity:.85}
+.ribbon-legend{display:flex;gap:12px;align-items:center;
+  font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--ink-3);
+  margin:0 0 4px}
+.ribbon-legend i{display:inline-block;width:7px;height:7px;margin-right:5px;
+  vertical-align:middle;border-radius:1px}
+.ribbon-legend .a i{background:var(--ink);opacity:.45}
+.ribbon-legend .d i{background:var(--red);opacity:.75}
+
+.railband{position:sticky;top:0;z-index:35;background:var(--paper);
+  padding:6px 0 4px;margin:0 0 3px;
+  border-bottom:1px solid transparent;transition:padding .25s ease}
+.railband.stuck{padding:3px 0 2px;border-bottom-color:var(--line-2);
+  box-shadow:0 1px 0 var(--line-2)}
+/* stuck 时不改高度 —— 改高度会破坏 aspect-ratio 的等比关系，
+                 改为整体缩小容器宽度比（见下）。 */
+.railband.stuck .ribbon{max-height:36px}
+/* 外层不设 height —— 让 .ribbon 主规则（clamp 40-56）作常态，
+                 .stuck 时由下文 !important 压到 22-30。多写一条 height 会打架。 */
+/* v11：这里原来有 transition:height —— 它会让 .stuck 的 !important 高度变化被冻结在过渡起始值。
+     实测：有 transition 时 stuck 前后都是 50.67px；删掉后立刻变成 25.33px。
+     收起动画改用 .railband 的 padding 过渡来承担（视觉上足够）。 */
+.railband .ribbon{margin:0}
+/* 收起后图例让位：图例只在「第一次看到」时起作用，
+   读者滚起来时已经懂了，继续占 15px 不划算。 */
+.railband .ribbon-legend{transition:opacity .22s ease,max-height .22s ease;max-height:20px;overflow:hidden}
+.railband.stuck .ribbon-legend{opacity:0;max-height:0;margin:0}
+
+@media (max-width:1180px){
+  .frame{padding-left:clamp(20px,5vw,48px);padding-right:clamp(20px,5vw,48px)}
+}
+
+/* ═════════ 首屏 ═════════ */
+.hero{padding:clamp(60px,11vh,120px) 0 clamp(40px,6vh,66px)}
+.eyebrow{
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.3em;
+  text-transform:uppercase;color:var(--red);font-weight:600;
+  display:flex;align-items:center;gap:12px;margin-bottom:clamp(22px,3.4vh,34px)}
+.eyebrow::after{content:'';flex:1;height:1px;background:var(--line-2);max-width:90px}
+
+h1{
+  font-family:var(--serif);font-weight:600;
+  font-size:clamp(31px,4.7vw,55px);line-height:1.24;letter-spacing:-.026em;
+  margin-bottom:clamp(24px,3.6vh,38px);text-wrap:balance;
+}
+
+/* 结论：不加框，只靠一条朱砂竖线 */
+
+
+/* ── v7 · 让三处「用文字描述图」的地方变成图 ── */
+
+/* ① 主判断单独成行（大字）。原来 141 字整段是「读课文」；
+   现在读者先看见一句判断，再决定要不要读细节。 */
+.headline{font-family:var(--serif);font-size:clamp(21px,3vw,33px);
+  line-height:1.44;letter-spacing:-.02em;color:var(--ink);font-weight:600;
+  margin:0 0 clamp(12px,1.8vh,18px);max-width:19ch;text-wrap:balance}
+.headline b,.headline strong{font-weight:700;
+  box-shadow:inset 0 -.3em 0 var(--red-soft)}
+
+
+
+/* ② 密度剖面（v14）：把相关系数从「散点图」改成「5 根条」。
+     散点图的失败在于它要求读者先理解「散点 + 拟合」才能读出趋势；
+     剖面直接把趋势画成条的长短，一眼可判。 */
+.insight{margin:0 0 clamp(24px,3.4vh,36px);padding:clamp(14px,2vw,18px) 0;
+  border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2)}
+.scatter{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);
+  gap:clamp(18px,3vw,36px);align-items:start}
+.prof-h{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;
+  color:var(--ink-3);margin-bottom:8px;text-transform:uppercase}
+.prof .row{display:grid;grid-template-columns:44px 1fr 58px;
+  gap:8px;align-items:center;margin-bottom:5px}
+.prof .lab{font-family:var(--mono);font-size:9.5px;color:var(--ink-3);
+  letter-spacing:.02em;text-align:right;font-variant-numeric:tabular-nums}
+.prof .track{position:relative;height:9px;background:var(--line-2);
+  border-radius:1px;overflow:hidden}
+.prof .track i{position:absolute;left:0;top:0;bottom:0;background:var(--ink);
+  opacity:.55;border-radius:1px}
+.prof .row:first-of-type .track i{background:var(--red);opacity:.85}
+.prof .num{font-family:var(--mono);font-size:9.5px;color:var(--ink-3);
+  font-variant-numeric:tabular-nums;white-space:nowrap}
+.prof .num em{font-style:normal;opacity:.55;margin-left:4px;font-size:8.5px}
+.prof-x{font-family:var(--mono);font-size:9px;color:var(--ink-4);
+  letter-spacing:.06em;margin-top:7px;text-align:right}
+.scatter .side{display:flex;flex-direction:column;gap:7px;
+  font-family:var(--mono);font-size:11px;color:var(--ink-3);letter-spacing:.03em;
+  padding-top:2px}
+.scatter .side b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+.scatter .verdict{font-family:var(--sans);font-size:13px;font-weight:600;
+  letter-spacing:0;padding:3px 0 6px;border-bottom:1px solid var(--line-2);
+  margin-bottom:3px}
+.scatter .verdict.down{color:var(--red)}
+.scatter .verdict.up{color:var(--teal)}
+@media (max-width:700px){
+  .scatter{grid-template-columns:1fr;gap:14px}
+  .prof .row{grid-template-columns:40px 1fr 52px}
+}
+/* ③ 每层的时长条：与弹幕条并排同刻度，两条一对比就看出「讲得久 ≠ 反应多」 */
+
+.verdict{
+  font-family:var(--serif);font-size:clamp(14.5px,1.45vw,16px);
+  line-height:1.86;color:var(--ink-2);letter-spacing:-.004em;
+  padding-left:clamp(16px,2.4vw,22px);
+  border-left:2px solid var(--red);
+  margin-bottom:clamp(32px,5vh,52px);
+}
+.verdict b,.verdict strong{color:var(--ink);font-weight:600}
+
+/* 数据：细线三段式，不用卡片 */
+.metrics{
+  display:grid;grid-template-columns:repeat(5,1fr);
+  border-top:1px solid var(--ink);border-bottom:1px solid var(--line);
+  margin-bottom:clamp(22px,3.4vh,32px)}
+.metric{padding:clamp(13px,2vh,18px) 10px clamp(11px,1.6vh,15px) 0;
+  border-right:1px solid var(--line-2)}
+.metric:last-child{border-right:0}
+.metric .v{display:block;font-family:var(--mono);font-size:clamp(17px,2.1vw,23px);
+  font-weight:600;line-height:1;letter-spacing:-.04em;color:var(--ink);
+  font-variant-numeric:tabular-nums;margin-bottom:6px}
+.metric .k{display:block;font-size:10.5px;letter-spacing:.1em;color:var(--ink-3)}
+
+.byline{display:flex;flex-wrap:wrap;gap:6px 18px;font-family:var(--mono);
+  font-size:11px;letter-spacing:.02em;color:var(--ink-3)}
+.byline a{color:var(--ink-2);text-decoration:none;
+  border-bottom:1px solid var(--line);transition:all .2s}
+.byline a:hover{color:var(--red);border-color:var(--red)}
+.byline .sep{color:var(--ink-4)}
+
+/* ═════════ 章节 ═════════ */
+.ch{margin-top:clamp(66px,10vh,112px);padding-top:clamp(28px,4vh,42px);
+  border-top:1px solid var(--line)}
+.ch:first-of-type{border-top:0;padding-top:0;margin-top:clamp(30px,5vh,52px)}
+
+.ch-h{display:flex;align-items:baseline;gap:14px;margin-bottom:clamp(8px,1.4vh,14px)}
+.ch-no{font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.1em;
+  color:var(--red);flex:none;padding-bottom:3px}
+.ch-h h2{font-family:var(--serif);font-size:clamp(21px,2.9vw,31px);
+  font-weight:600;line-height:1.3;letter-spacing:-.018em}
+.ch-sub{font-size:13.5px;color:var(--ink-3);max-width:44ch;
+  margin-bottom:clamp(26px,4vh,40px);line-height:1.72}
+
+/* ═════════ 01 命题 ═════════ */
+.thesis{
+  font-family:var(--serif);font-size:clamp(17px,1.95vw,20px);
+  line-height:1.85;color:var(--ink);letter-spacing:-.008em;
+  margin-bottom:clamp(26px,4vh,38px)}
+.thesis b,.thesis strong{font-weight:600;
+  box-shadow:inset 0 -.34em 0 var(--red-soft)}
+
+/* 数据行：不是卡片，是档案条目 */
+.facts{display:flex;flex-direction:column;border-top:1px solid var(--line)}
+.fact{display:grid;grid-template-columns:78px 1fr;gap:16px;
+  padding:12px 0;border-bottom:1px solid var(--line-2);align-items:baseline}
+.fact dt{font-family:var(--mono);font-size:11px;color:var(--red);
+  font-weight:600;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.fact dd{font-size:14.5px;color:var(--ink-2);line-height:1.7}
+
+.ctx{list-style:none;margin-top:clamp(22px,3vh,30px)}
+.ctx li{position:relative;padding-left:18px;margin-bottom:11px;
+  font-size:15px;line-height:1.8;color:var(--ink-2)}
+.ctx li::before{content:'—';position:absolute;left:0;color:var(--ink-4)}
+
+/* ═════════ 02 论证：时间锚定阶梯 ═════════ */
+.stack{position:relative}
+.step{border-bottom:1px solid var(--line-2)}
+.step:last-child{border-bottom:0}
+.step-h{display:grid;grid-template-columns:66px 1fr 18px;
+  gap:clamp(10px,2vw,20px);align-items:baseline;
+  padding:clamp(17px,2.4vh,24px) 0;cursor:pointer;list-style:none;
+  transition:padding .3s cubic-bezier(.22,.9,.3,1)}
+.step-h::-webkit-details-marker{display:none}
+.step-h:hover{padding-left:6px}
+.step-h .tc{font-family:var(--mono);font-size:11px;font-weight:600;
+  color:var(--red);letter-spacing:.03em;font-variant-numeric:tabular-nums;
+  flex:none;padding-top:4px}
+.step-h h3{font-family:var(--serif);font-size:clamp(16px,1.95vw,20px);
+  font-weight:600;line-height:1.45;letter-spacing:-.012em}
+.step-h .ar{font-size:9px;color:var(--ink-4);
+  transition:transform .3s cubic-bezier(.22,.9,.3,1)}
+.step[open] .step-h .ar{transform:rotate(90deg);color:var(--red)}
+.step[open] .step-h{padding-left:6px}
+.step-body{padding:0 0 clamp(18px,2.6vh,26px) calc(66px + clamp(10px,2vw,20px))}
+/* v8：展开的细项走双列。标题只占一行、右边大片空白，
+   原来却让正文单列一路往下拉长页面——把横向空间用起来。 */
+@media (min-width:900px){
+  .step-body{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:clamp(16px,2.4vh,24px) clamp(24px,3.6vw,48px);align-items:start}
+  .step-body .sub.wide{grid-column:1 / -1}
+  .step-body .sub.key .sub-t::before{content:'';position:absolute;left:-11px;top:.42em;
+    bottom:.42em;width:2px;background:var(--red);opacity:.85}
+}
+/* ── v10 子区块：不再是一条条 <p>，而是长短不一的格子 ──
+   三个视觉属性承载信息：
+     横向跨度 = 内容份量（长的跨两栏）
+     序号+衬线标题 = 层级
+     左侧朱砂竖线 = 结论性条目
+   不用图标——图标对 22 个不同标题没有信息量。 */
+.sub{position:relative;min-width:0}
+.sub-n{display:block;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.12em;color:var(--ink-4);margin-bottom:5px;
+  font-variant-numeric:tabular-nums}
+.sub-t{position:relative;display:block;font-family:var(--serif);
+  font-size:clamp(15px,1.5vw,16.5px);font-weight:600;line-height:1.45;
+  letter-spacing:-.01em;color:var(--ink);margin-bottom:7px}
+.sub-x{display:block;font-size:14px;line-height:1.78;color:var(--ink-2)}
+.sub-x b,.sub-x strong{color:var(--ink);font-weight:600}
+
+.step-body p{font-size:14.8px;line-height:1.82;color:var(--ink-2);margin-bottom:9px}
+.step-body p:last-child{margin-bottom:0}
+.step-body b{color:var(--ink);font-weight:600}
+
+/* ═════════ 03 金句 ═════════ */
+/* 论证层的观众读数（v6）：每条论证旁边显示该时间段的弹幕密度。
+   没有弹幕峰值的层也要显示——「这里没人说话」本身是信息。 */
+/* v9 修复：.aud 被 appendChild 进 .step-h（3 列网格），只能占第一列 66px，
+   于是竖着堆、右边全空——就是主上说的「抽屉物品展开在柜门外边」。
+   加 grid-column:1/-1 让它横跨整行，并把内容改成横向铺开。 */
+.aud{grid-column:1 / -1;
+  display:flex;align-items:center;gap:7px;margin-top:9px;flex-wrap:wrap;
+  font-family:var(--mono);font-size:10px;letter-spacing:.04em;color:var(--ink-3)}
+.aud .dur{position:relative;width:clamp(56px,9vw,120px);height:4px;
+  background:var(--line-2);border-radius:1px;overflow:hidden;flex:none}
+.aud .dur i{position:absolute;left:0;top:0;bottom:0;background:var(--ink-3);
+  opacity:.4;border-radius:1px}
+.aud .bar{position:relative;width:clamp(56px,9vw,120px);height:4px;background:var(--line-2);
+  border-radius:1px;overflow:hidden;flex:none}
+.aud .bar i{position:absolute;left:0;top:0;bottom:0;background:var(--red);
+  opacity:.6;border-radius:1px}
+.aud .grp{display:inline-flex;align-items:center;gap:6px;flex:none}
+.aud .lbl{font-size:9px;letter-spacing:.05em;opacity:.7;flex:none;
+  min-width:2em;white-space:nowrap}
+.aud .tag{padding:1px 5px;border:1px solid var(--line);border-radius:2px;
+  font-size:9px;letter-spacing:.06em}
+.aud .tag.res{border-color:var(--red);color:var(--red)}
+.aud .tag.quiet{opacity:.7}
+.aud em{font-style:normal;opacity:.75}
+
+.quote{padding:clamp(22px,3.2vh,32px) 0;border-bottom:1px solid var(--line-2)}
+.quote:last-of-type{border-bottom:0}
+.quote blockquote{font-family:var(--serif);
+  font-size:clamp(18px,2.3vw,25px);line-height:1.68;color:var(--ink);
+  letter-spacing:-.016em;font-weight:500;
+  margin-bottom:14px;position:relative;padding-left:clamp(18px,2.6vw,26px)}
+.quote blockquote::before{content:'';position:absolute;left:0;top:.42em;bottom:.42em;
+  width:2px;background:var(--red);opacity:.9}
+.quote .src{display:flex;align-items:baseline;gap:12px;
+  padding-left:clamp(18px,2.6vw,26px);
+  font-size:12.5px;color:var(--ink-3);line-height:1.65}
+.quote .src .tc{font-family:var(--mono);font-size:11px;font-weight:600;
+  color:var(--red);flex:none;font-variant-numeric:tabular-nums}
+
+/* ═════════ 04 回声 ═════════ */
+.echo{display:flex;flex-direction:column;gap:0}
+.voice{padding:clamp(17px,2.4vh,22px) 0;border-bottom:1px solid var(--line-2)}
+.voice:last-child{border-bottom:0}
+.voice p{font-size:14.6px;line-height:1.8;color:var(--ink-2);margin-bottom:11px}
+.voice .who{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);
+  letter-spacing:.04em;display:flex;justify-content:space-between;gap:12px}
+.voice .who .lk{color:var(--red);font-weight:600}
+
+.dmwall{display:flex;flex-wrap:wrap;gap:5px;margin-top:clamp(24px,3.4vh,34px)}
+.dm{font-size:12px;padding:4px 9px;border:1px solid var(--line-2);
+  border-radius:2px;color:var(--ink-3);background:var(--paper-2);
+  transition:all .18s ease}
+.dm:hover{border-color:var(--red);color:var(--red)}
+.dm b{font-family:var(--mono);font-size:9.5px;opacity:.55;margin-left:4px;font-weight:600}
+
+/* ═════════ 页脚 ═════════ */
+.foot{margin-top:clamp(72px,11vh,120px);padding-top:clamp(26px,4vh,38px);
+  border-top:1px solid var(--ink)}
+.foot-row{display:flex;flex-wrap:wrap;gap:6px 20px;font-family:var(--mono);
+  font-size:10.5px;color:var(--ink-3);letter-spacing:.04em;margin-bottom:20px}
+.foot-txt{font-size:12.5px;line-height:1.9;color:var(--ink-3);max-width:58ch}
+.foot-txt b{color:var(--ink-2);font-weight:600}
+.foot-txt a{color:var(--red);text-decoration:none;
+  border-bottom:1px solid var(--red-soft)}
+.foot-txt a:hover{border-color:var(--red)}
+.foot-txt code{font-family:var(--mono);font-size:.92em;
+  background:var(--paper-3);padding:.1em .36em;border-radius:2px;color:var(--ink-2)}
+
+.empty{font-family:var(--mono);font-size:13px;color:var(--ink-3);padding:10px 0}
+
+/* ═════════ 工具 ═════════ */
+.tools{position:fixed;right:clamp(12px,2vw,22px);bottom:clamp(12px,2vw,22px);
+  display:flex;gap:6px;z-index:70}
+.tools button{border:1px solid var(--line);background:var(--paper);
+  color:var(--ink-3);border-radius:2px;padding:7px 12px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;
+  cursor:pointer;transition:all .2s ease}
+.tools button:hover{color:var(--red);border-color:var(--red)}
+.tools button:active{transform:scale(.94)}
+/* 外观切换：阅读版 ⇄ v4 完整版。两者吃同一份数据，只是模板不同，
+   所以就是一条相对链接，不需要任何 JS 或重新取数。 */
+.tools .tov{display:inline-flex;align-items:center;border:1px solid var(--line);
+  background:var(--paper);color:var(--ink-2);border-radius:2px;padding:7px 12px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;
+  text-decoration:none;transition:all .2s ease}
+.tools .tov:hover{color:var(--red);border-color:var(--red)}
+
+/* ═════════ 动效 ═════════ */
+html.anim .fade{opacity:0;transform:translateY(18px);
+  transition:opacity .8s cubic-bezier(.2,.9,.3,1),transform .8s cubic-bezier(.2,.9,.3,1)}
+html.anim .fade.in{opacity:1;transform:none}
+.hero .fade:nth-of-type(1){transition-delay:0s}
+.hero .fade:nth-of-type(2){transition-delay:.1s}
+.hero .fade:nth-of-type(3){transition-delay:.18s}
+.hero .fade:nth-of-type(4){transition-delay:.26s}
+.hero .fade:nth-of-type(5){transition-delay:.32s}
+
+@media (prefers-reduced-motion:reduce){
+  html.anim .fade{opacity:1!important;transform:none!important;transition:none!important}
+  html{scroll-behavior:auto}
+}
+@media print{
+  .tools,.rail{display:none}
+  html.anim .fade{opacity:1!important;transform:none!important}
+  .frame{margin-left:auto!important;max-width:100%}
+  .ch{page-break-inside:avoid;margin-top:30px;padding-top:18px}
+  .hero{padding-top:0}
+  body{font-size:11pt}
+}
+/* ═══ 窄屏（v11 重做）═══
+   竖轴删掉后，窄屏不需要再为轨道让位；
+   重点是：单列化、字号舒适、横带不挤占视口、所有网格不外溢。 */
+@media (max-width:700px){
+  body{font-size:16px;line-height:1.82}
+  .frame{padding-left:clamp(16px,4.5vw,24px);padding-right:clamp(16px,4.5vw,24px)}
+
+  /* 首屏 */
+  .hero{padding:clamp(40px,7vh,70px) 0 clamp(28px,4vh,44px)}
+  .headline{font-size:clamp(24px,6.6vw,32px);max-width:none}
+  .verdict{font-size:15px}
+
+  /* 数据条：3 列换行 */
+  .metrics{grid-template-columns:repeat(3,1fr)}
+  .metric{border-right:0;border-bottom:1px solid var(--line-2);padding:11px 6px}
+  .metric:nth-child(3n){border-right:1px solid var(--line-2)}
+  .metric .v{font-size:18px}
+
+  /* 声纹带：窄屏压缩，别占太多视口 */
+  .railband{padding:6px 0 5px}
+  .railband .ribbon{max-height:52px}
+  .railband.stuck .ribbon{max-height:30px}
+  .ribbon-legend{font-size:8.5px;gap:10px}
+
+  /* 论证层：时间码列收窄，展开区回到单列（两栏在手机上没法看） */
+  .step-h{grid-template-columns:46px 1fr 14px;gap:9px}
+  .step-h h3{font-size:16px}
+  .step-body{padding-left:calc(46px + 9px);grid-template-columns:1fr !important;
+    gap:14px}
+  .step-body .sub.wide{grid-column:auto}
+  .aud{gap:5px}
+  .aud .bar,.aud .dur{width:clamp(40px,14vw,72px)}
+  .aud .lbl{min-width:1.6em;font-size:8.5px}
+  .aud em{font-size:9px}
+
+  /* 子区块 */
+  .sub-t{font-size:15px}
+  .sub-x{font-size:13.6px;line-height:1.76}
+
+  /* 事实行 */
+  .fact{grid-template-columns:56px 1fr;gap:10px}
+
+  /* 散点 */
+  .scatter{gap:14px}
+
+  /* 金句 */
+  .quote blockquote{font-size:17px;padding-left:14px}
+  .quote .src{padding-left:14px;font-size:11.5px}
+
+  /* 工具按钮 */
+  .tools{right:10px;bottom:10px}
+  .tools button{padding:7px 11px;font-size:10px}
+}
+
+/* 超窄（≤380px）再压一档 */
+@media (max-width:380px){
+  .metrics{grid-template-columns:repeat(2,1fr)}
+  .metric:nth-child(3n){border-right:0}
+  .metric:nth-child(2n){border-right:1px solid var(--line-2)}
+  .aud .bar,.aud .dur{width:44px}
+}
+</style>
+</head>
+<body>
+
+
+
+<main class="frame">
+
+  <header class="hero">
+    <div class="eyebrow fade" id="eyebrow">B站视频解读</div>
+    <h1 class="fade" id="title">—</h1>
+    <p class="headline fade" id="headline"></p>
+    <p class="verdict fade" id="verdict">—</p>
+    <div class="metrics fade" id="metrics"></div>
+    <div class="byline fade" id="byline"></div>
+  </header>
+
+  <!-- v8：声纹带移出 hero 放进 .frame 直接子级。
+       sticky 只在自己的父容器范围内生效——留在 hero 里就滚出去即失效，
+       放进贯穿全页的 .frame 才能一路跟随。 -->
+  <div class="railband" id="railband">
+    <span class="ribbon-legend" id="ribbonLegend">
+      <span class="a"><i></i>声音 ↓</span><span class="d"><i></i>弹幕 ↑</span>
+    </span>
+    <div class="ribbon" id="ribbon">
+      <svg id="ribbonSvg" viewBox="0 0 1000 80" preserveAspectRatio="none" aria-hidden="true"></svg>
+      <div class="ribbon-head" id="ribbonHead"></div>
+    </div>
+  </div>
+  <div class="insight" id="insight" hidden></div>
+
+  <section class="ch" id="c1">
+    <div class="ch-h fade"><span class="ch-no">01</span><h2>这是什么</h2></div>
+    <p class="ch-sub fade" id="sub1"></p>
+    <div class="fade" id="body1"></div>
+  </section>
+
+  <section class="ch" id="c2">
+    <div class="ch-h fade"><span class="ch-no">02</span><h2>怎么讲的</h2></div>
+    <p class="ch-sub fade" id="sub2"></p>
+    <div class="stack fade" id="stack"></div>
+  </section>
+
+  <section class="ch" id="c3">
+    <div class="ch-h fade"><span class="ch-no">03</span><h2>最值得记的</h2></div>
+    <p class="ch-sub fade" id="sub3"></p>
+    <div class="fade" id="quotes"></div>
+  </section>
+
+  <section class="ch" id="c4">
+    <div class="ch-h fade"><span class="ch-no">04</span><h2>回声</h2></div>
+    <p class="ch-sub fade" id="sub4"></p>
+    <div class="echo fade" id="voices"></div>
+    <div class="dmwall fade" id="danmaku"></div>
+  </section>
+
+  <footer class="foot" id="foot"></footer>
+</main>
+
+<div class="tools">
+  <a class="tov" id="toV4" href="./__CROSS_HREF__" title="切换外观">__CROSS_LABEL__</a>
+  <button id="tg" type="button">暗</button>
+  <button id="tp" type="button">↑</button>
+</div>
+<script>
+/* ══════════ v3「时序卷轴」渲染引擎 ══════════
+   数据契约沿用 build_report.py 的 __DATA__ 注入，字段名不变。
+   新增可选字段：takeaways[i].t / quotes[i].t —— 有就显示时间码，没有就显示序号。
+   **绝不编造时间码**：拿不到真实时间戳就退回序号。 */
+
+const __TPL_MODE__ = (typeof __DATA__ === 'undefined');
+const D = __TPL_MODE__ ? {
+  meta:{}, call:'', backdrop:null, env_fit:null, takeaways:[], note_sections:[],
+  quotes:[], top_comments:[], danmaku_top:[], evidence:null, type:'essay'
+} : __DATA__;
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const richEsc = s => esc(s).replace(/&lt;(b|strong)&gt;([\s\S]*?)&lt;\/\1&gt;/g, '<$1>$2</$1>');
+const nf = n => { const v=(n==null?0:n); return v>=10000 ? ((v/10000).toFixed(1)+'万') : String(v); };
+const mmss = s => { s=Math.max(0,Math.round(s||0)); return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); };
+const toSec = t => { if(!t) return null; const p=String(t).split(':').map(Number);
+  if(p.some(isNaN)) return null; return p.length>=2 ? p[0]*60+p[1] : p[0]; };
+
+const M = D.meta || {};
+const DUR = M.duration || 0;
+const isEssay = (D.type || 'essay') === 'essay';
+
+/* ══════ 首屏 ══════ */
+$('title').textContent = (M.title || '未命名视频').replace(/\s+/g,' ');
+$('verdict').innerHTML = D.call ? richEsc(D.call) : '（数据不足以支撑结论，如实留空）';
+
+/* v7：主判断单独成行。原来 D.call 那 141 字整段是「读课文」——
+   读者要先读完才知道在说什么。现在先给一句判断，细节降为副说明。 */
+if (D.headline) {
+  const hl = $('headline');
+  if (hl) hl.innerHTML = richEsc(D.headline);
+} else {
+  const hl = $('headline');
+  if (hl) hl.remove();
+}
+
+const st = M.stat || {};
+const mets = [['播放',nf(st.view)],['点赞',nf(st.like)],['收藏',nf(st.favorite)],['评论',nf(st.reply)],['时长',mmss(DUR)]];
+$('metrics').innerHTML = mets.map(([k,v]) =>
+  `<div class="metric"><span class="v">${esc(v)}</span><span class="k">${esc(k)}</span></div>`).join('');
+
+const owner=(M.owner&&M.owner.name)||'', pub=(M.published||'').slice(0,10);
+const by=[];
+if(owner) by.push(`<span>${esc(owner)}</span>`);
+if(pub) by.push(`<span class="sep">·</span><span>${esc(pub)}</span>`);
+if(M.bvid) by.push(`<span class="sep">·</span><a href="https://www.bilibili.com/video/${esc(M.bvid)}/" target="_blank" rel="noopener">原片 ↗</a>`);
+by.push(`<span class="sep">·</span><a href="./archive.md">知识库版 ↗</a>`);
+$('byline').innerHTML = by.join('');
+
+/* ══════ 01 这是什么 ══════ */
+const bd = D.backdrop || {}, fit = D.env_fit || {};
+
+if (isEssay) {
+  $('sub1').textContent = '这支视频在讲什么，以及它为什么要讲。';
+  const facts = (bd.stats||[]).map(s =>
+    `<div class="fact"><dt>${esc(s[0])}</dt><dd>${esc(s[1])}</dd></div>`).join('');
+  const ctx = (bd.context||[]).map(c => `<li>${richEsc(c)}</li>`).join('');
+  $('body1').innerHTML = `
+    ${bd.title ? `<p class="eyebrow" style="margin-bottom:14px">${esc(bd.title)}</p>` : ''}
+    ${bd.thesis ? `<div class="thesis">${richEsc(bd.thesis)}</div>` : ''}
+    ${facts ? `<dl class="facts">${facts}</dl>` : ''}
+    ${ctx ? `<ul class="ctx">${ctx}</ul>` : ''}`;
+} else {
+  $('sub1').textContent = '这套东西解决什么问题，适不适合你。';
+  const lv=(fit.level==null?0:fit.level);
+  const lb=fit.verdict||(lv>=2?'适合上手':lv===1?'有条件可用':'暂不建议');
+  const rs=(fit.reasons||[]).map(x=>`<li>${richEsc(x)}</li>`).join('');
+  const rq=(fit.requirements||[]).map(x=>`<li>${richEsc(x)}</li>`).join('');
+  $('body1').innerHTML = `
+    ${fit.summary ? `<div class="thesis">${richEsc(fit.summary)}</div>` : ''}
+    <dl class="facts">
+      <div class="fact"><dt>${esc(lb)}</dt><dd>适配结论</dd></div>
+      <div class="fact"><dt>${lv}/2</dt><dd>等级</dd></div>
+      <div class="fact"><dt>${(fit.score==null?0:fit.score)}/5</dt><dd>匹配度</dd></div>
+    </dl>
+    ${rs ? `<ul class="ctx">${rs}</ul>` : ''}
+    ${rq ? `<ul class="ctx">${rq}</ul>` : ''}`;
+}
+
+/* ══════ 02 怎么讲的 ══════ */
+const steps = isEssay ? (D.takeaways||[]) : (D.note_sections||[]);
+$('sub2').textContent = isEssay
+  ? '按时间顺序排开。点开任意一层看细节。'
+  : '按操作顺序排开。点开任意一步看细节。';
+
+$('stack').innerHTML = steps.length ? steps.map((s,i) => {
+  /* 有真实时间码就用，没有就用序号 —— 绝不编造 */
+  const sec = toSec(s.t);
+  const label = sec != null ? mmss(sec) : String(i+1).padStart(2,'0');
+  /* 子区块视觉化：
+     - 正文长度 ≥62 字 → 跨两栏（份量重的给更宽的版面）
+     - 标题含「结论/核心/论断/最后/一句话」→ 朱砂竖线标为关键条目
+     - 每条带两位序号，让「这层讲了几个点」一眼可数
+     跨度与标记都由【内容长度与关键词】决定，不是随机装饰。 */
+  const KEY_RE = /结论|核心|论断|最后|关键|本质/;
+  /* 跨度用【层内相对分位】而不是绝对字数：
+     绝对阈值会让有的层全跨、有的层全不跨（实测第5层6条全单栏、第4层6条跨2条）。
+     相对分位保证每层都有节奏，且「谁更重要」是跟同层其他条相比得出的。 */
+  const lens = (s.items || []).map(it => (it.text || '').replace(/<[^>]+>/g,'').length);
+  const sorted = [...lens].sort((a,b) => b-a);
+  const cut = sorted.length >= 3 ? sorted[Math.max(0, Math.floor(sorted.length / 2))] + 1 : 999;
+  const subs = (s.items || []).map((it, k) => {
+    const plain = (it.text || '').replace(/<[^>]+>/g, '');
+    const wide = lens[k] >= cut;
+    const key = KEY_RE.test(it.title || '');
+    const cls = 'sub' + (wide ? ' wide' : '') + (key ? ' key' : '');
+    return `<div class="${cls}">
+      <span class="sub-n">${String(k+1).padStart(2,'0')}</span>
+      <span class="sub-t">${esc(it.title || '')}</span>
+      ${it.text ? `<span class="sub-x">${richEsc(it.text)}</span>` : ''}
+    </div>`;
+  }).join('');
+  return `<details class="step">
+    <summary class="step-h">
+      <span class="tc">${esc(label)}</span>
+      <h3>${esc(s.h)}</h3>
+      <span class="ar">▶</span>
+    </summary>
+    <div class="step-body">${subs || '<p class="empty">本节无细项</p>'}</div>
+  </details>`;
+}).join('') : '<div class="empty">未提供分层内容</div>';
+
+/* ══════ 03 金句 ══════ */
+const qs = D.quotes || [];
+$('sub3').textContent = qs.length ? `${qs.length} 句原话，附一句「为什么值得记」。` : '';
+function quoteHTML(q){
+  return `<div class="quote">
+    <blockquote>${richEsc(q.text)}</blockquote>
+    <div class="src"><span class="tc">${esc(q.t||'')}</span><span>${esc(q.why||'')}</span></div>
+  </div>`;
+}
+if (qs.length) {
+  const head = qs.slice(0,5).map(quoteHTML).join('');
+  const rest = qs.slice(5);
+  const more = rest.length ? `<details class="step" style="border-top:1px solid var(--line-2)">
+      <summary class="step-h"><span class="tc">＋</span><h3>还有 ${rest.length} 句</h3><span class="ar">▶</span></summary>
+      <div class="step-body">${rest.map(quoteHTML).join('')}</div>
+    </details>` : '';
+  $('quotes').innerHTML = head + more;
+}
+if (!qs.length) $('c3').style.display = 'none';
+
+/* ══════ v6：把信号贴回正文 ══════
+   每层论证都有真实时间码 t。用「本层 t → 下一层 t」作为区间，
+   统计区间内的弹幕密度与共振/背离，渲染成一行「观众读数」。
+   v5 时这些信号只活在首屏洞察行；v6 让它们回到读者正在读的那一段旁边。
+   某层一个弹幕峰值都没有也照常显示——「这里没人说话」本身就是结论。 */
+(function(){
+  const RAW = D.envelope || null;
+  if (!RAW || !Array.isArray(RAW.danmakuNorm) || !Array.isArray(D.takeaways)) return;
+  const dn = RAW.danmakuNorm, cnt = RAW.danmaku || [];
+  const nn = dn.length;
+  if (!nn || !DUR) return;
+  const sig = (RAW.resonance || []).concat(RAW.divergence || []);
+  const stepEls = [...document.querySelectorAll("#stack .step")];
+  if (!stepEls.length) return;
+
+  const sec = x => { if (!x) return null; const p = String(x).split(":").map(Number);
+    return p.some(isNaN) ? null : (p.length >= 2 ? p[0]*60+p[1] : p[0]); };
+
+  stepEls.forEach(function(el, i){
+    const st = sec((D.takeaways[i] || {}).t);
+    if (st == null) return;
+    const nx = (i + 1 < D.takeaways.length) ? sec(D.takeaways[i+1].t) : DUR;
+    const a = st, b = (nx == null ? DUR : nx);
+    if (b <= a) return;
+    const i0 = Math.max(0, Math.floor(a / DUR * nn));
+    const i1 = Math.min(nn, Math.ceil(b / DUR * nn));
+    if (i1 <= i0) return;
+
+    let total = 0, peak = 0;
+    for (let k = i0; k < i1; k++){ total += cnt[k] || 0; if (dn[k] > peak) peak = dn[k]; }
+    const res = sig.filter(s => s.t >= a && s.t < b && s.kind === "resonance").length;
+    const div = sig.filter(s => s.t >= a && s.t < b && s.kind !== "resonance").length;
+
+    let tag;
+    if (res > 0)          tag = '<span class="tag res">共振 ' + res + '</span>';
+    else if (peak >= 0.6) tag = '<span class="tag res">峰值</span>';
+    else if (div > 0)     tag = '<span class="tag">背离 ' + div + '</span>';
+    else                  tag = '<span class="tag quiet">安静</span>';
+
+    /* 两条同刻度的条并排：
+       上＝该层占全片时长的比例（灰），下＝该层弹幕密度峰值（红）。
+       两条一对比，「讲得久 ≠ 反应多」不用写一个字就能看出来。 */
+    const durPct = Math.round((b - a) / DUR * 100);
+    const line = document.createElement("div");
+    line.className = "aud";
+    line.innerHTML =
+        '<span class="grp"><span class="lbl">时长</span>'
+      + '<span class="dur"><i style="width:' + durPct + '%"></i></span></span>'
+      + '<span class="grp"><span class="lbl">弹幕</span>'
+      + '<span class="bar"><i style="width:' + Math.round(peak*100) + '%"></i></span></span>'
+      + '<em>' + Math.round(b - a) + 's · ' + total + ' 条</em>' + tag;
+    const h = el.querySelector(".step-h");
+    if (h) h.appendChild(line);
+  });
+})();
+
+/* ══════ 04 回声 ══════ */
+const cm = (D.top_comments||[]).slice(0,3);
+const rep = st.reply || 0;
+$('sub4').textContent = rep ? `评论区共 ${rep} 条。这里挑 3 条，完整清单在知识库版。` : '';
+$('voices').innerHTML = cm.length ? cm.map(c => {
+  const who = c.user || c.name || ((c.member||{}).uname) || '匿名';
+  let txt = c.text || c.content || ((c.content||{}).message) || '';
+  if (typeof txt === 'object') txt = txt.message || '';
+  const lk = c.like || 0;
+  return `<div class="voice"><p>${richEsc(txt)}</p>
+    <div class="who"><span>${esc(who)}</span>${lk?'<span class="lk">♥ '+lk+'</span>':''}</div></div>`;
+}).join('') : '<div class="empty">无评论</div>';
+
+function dmParse(d){
+  if(typeof d==='string') return {t:d,n:0};
+  if(Array.isArray(d)) return {t:String(d[0]==null?'':d[0]),n:Number(d[1])||0};
+  if(d&&typeof d==='object') return {t:d.text||d.content||'',n:Number(d.count)||0};
+  return {t:'',n:0};
+}
+const dms = (D.danmaku_top||[]).slice(0,14).map(dmParse).filter(o=>o.t);
+$('danmaku').innerHTML = dms.map(o =>
+  `<span class="dm">${esc(o.t)}${o.n>1?'<b>'+o.n+'</b>':''}</span>`).join('');
+
+/* ══════ 页脚 ══════ */
+const e = D.evidence || {};
+const evb = [];
+if (e && typeof e==='object' && !Array.isArray(e)) ['meta','transcript','comments','danmaku'].forEach(k=>{ if(e[k]) evb.push(e[k]); });
+else if (Array.isArray(e)) e.forEach(x=>{ if(x&&(x.note||x.src)) evb.push(x.note||x.src); });
+$('foot').innerHTML = `
+  <div class="foot-row">
+    <span>B 站公开接口</span>${M.bvid?'<span>'+esc(M.bvid)+'</span>':''}
+    ${DUR?'<span>'+mmss(DUR)+'</span>':''}<span>bili 技能 v3</span>
+  </div>
+  <p class="foot-txt">
+    <b>阅读版</b> · 控制在 3000 字内，逐句稿已移出。
+    完整逐句稿、全部评论与原始证据在 <a href="./archive.md">archive.md</a>；
+    需要完整可视化长文时看 <code>report.html</code>。
+    ${evb.length ? '<br><br>' + evb.map(richEsc).join(' · ') : '0 条按 0 条记录，不做补全。'}
+  </p>`;
+
+/* ══════ 时间轨：刻度 + 游标 ══════ */
+(function(){
+  if (!DUR) return;
+
+  /* 收集真实时间锚点（要点 + 金句），画成密度刻度 */
+  const anchors = [];
+  (D.points||[]).forEach(p => { const s=toSec(p.t); if(s!=null) anchors.push(s); });
+  qs.forEach(q => { const s=toSec(q.t); if(s!=null) anchors.push(s); });
+  anchors.sort((a,b)=>a-b);
+
+  /* ── 声纹绘制（v4 核心）──
+     ENV.rms 是 envelope.py 从真实音频算出的 0..1 音量包络（分位数归一）。
+     竖轨画成上下对称的波形带：响的地方宽，静的地方窄。
+     拿不到 envelope 就什么都不画，轨道退化为 v3 的直线，页面不会坏。 */
+  /* 兼容两种数据形态：
+     - envelope.py  → { rms:[...] }                        单信号（只有声音）
+     - tracks.py    → { audio:[...], danmakuNorm:[...] }   双信号（声音 + 弹幕）
+     有 audio 就按双信号画，否则退回 v4 单声纹。 */
+  const RAW = D.envelope || null;
+  const IS_DUAL = !!(RAW && Array.isArray(RAW.audio) && Array.isArray(RAW.danmakuNorm));
+  const ENV = RAW && (IS_DUAL || Array.isArray(RAW.rms)) ? RAW : null;
+  const AUDIO = ENV ? (IS_DUAL ? ENV.audio : ENV.rms) : null;
+
+  /* ── 声音 × 弹幕 密度剖面（v14 重设计）──
+     旧版是 400 点散点 + 最小二乘拟合线，实测失败：
+       · 400 个点在 120×120 的框里挤成上下两条带，看不出趋势
+       · 轴标签 6.4px，看不清；"斜率 ↓" 标在 viewBox 外（y=-3）
+       · 读图需要理解「散点 + 拟合」两个概念，对一眼会意是负担
+     新版把「声音强度」切 5 档，每档画一根横条表示该档的平均弹幕密度：
+       条越长 = 该音量区间里观众越活跃
+       5 根条从左到右递减 = 「越响，越安静」，不用任何文字解释
+     样本数同时显示，避免「某档只有 3 个样本」时的误导。 */
+  function scatterBlock(A, Dm, corr, resN, divN){
+    const n = Math.min(A.length, Dm.length);
+    if (n < 10) return '';
+
+    const BINS = 5;
+    const sum = new Array(BINS).fill(0), cnt = new Array(BINS).fill(0);
+    for (let i = 0; i < n; i++){
+      const b = Math.min(BINS - 1, Math.max(0, Math.floor(A[i] * BINS)));
+      sum[b] += Dm[i]; cnt[b]++;
+    }
+    const avg = sum.map((s, i) => cnt[i] ? s / cnt[i] : 0);
+    const mx = Math.max.apply(null, avg) || 1;
+
+    let rows = '';
+    for (let i = 0; i < BINS; i++){
+      const lo = (i / BINS).toFixed(1), hi = ((i + 1) / BINS).toFixed(1);
+      const pct = Math.round(avg[i] / mx * 100);
+      rows += '<div class="row">'
+        + '<span class="lab">' + lo + '–' + hi + '</span>'
+        + '<span class="track"><i style="width:' + Math.max(3, pct) + '%"></i></span>'
+        + '<span class="num">' + pct + '<em>n=' + cnt[i] + '</em></span>'
+        + '</div>';
+    }
+
+    const dir = avg[0] > avg[BINS - 1] ? 'down' : 'up';
+    const dropPct = avg[0] > 0 ? Math.round((1 - avg[BINS - 1] / avg[0]) * 100) : 0;
+
+    return '<div class="scatter">'
+      + '<div class="prof">'
+      +   '<div class="prof-h">声音强度 → 平均弹幕密度</div>'
+      +   rows
+      +   '<div class="prof-x">声音由轻到重</div>'
+      + '</div>'
+      + '<div class="side">'
+      +   '<span class="verdict ' + dir + '">'
+      +     (dir === 'down' ? '越响 · 越安静 −' + dropPct + '%' : '越响 · 越活跃 +' + dropPct + '%')
+      +   '</span>'
+      +   '<span>相关 <b>' + (corr >= 0 ? '+' : '') + corr.toFixed(2) + '</b></span>'
+      +   '<span>共振 <b>' + resN + '</b></span>'
+      +   '<span>背离 <b>' + divN + '</b></span>'
+      + '</div>'
+      + '</div>';
+  }
+
+  /* 混音台布局：中轴 cy，声音【向下】填充，弹幕【向上】竖条。
+     两条信号来源完全独立，叠在一起才看得出「讲到了」与「没人理」的差别。 */
+  /* v13：viewBox 高从 140 降到 80，让纵向缩放比接近横向缩放比。
+     原来 140÷51px = 0.362 纵向 vs 632÷1000 = 0.632 横向，
+     两轴差 1.75 倍 → 波形被纵向压扁成「上下都长的一条糊带」。 */
+  const RW = 1000, RY = 40, RMAX = 30, RH = 80;
+
+  function audioAreaPath(vals){
+    const n = vals.length;
+    const top = [], bot = [];
+    for (let i = 0; i < n; i++){
+      const x = (i / (n - 1)) * RW;
+      top.push([x.toFixed(1), RY.toFixed(1)]);
+      bot.push([x.toFixed(1), (RY + vals[i] * RMAX).toFixed(1)]);
+    }
+    return 'M ' + top.map(p => p[0] + ' ' + p[1]).join(' L ')
+         + ' L ' + bot.reverse().map(p => p[0] + ' ' + p[1]).join(' L ') + ' Z';
+  }
+
+  function audioContour(vals){
+    const n = vals.length, pts = [];
+    for (let i = 0; i < n; i++){
+      pts.push([(i / (n - 1) * RW).toFixed(1), (RY + vals[i] * RMAX).toFixed(1)]);
+    }
+    return 'M ' + pts.map(p => p[0] + ' ' + p[1]).join(' L ');
+  }
+
+  function danmakuBars(vals, n){
+    /* 每个非零格画一根竖条。
+       2026-10-29 实测问题：初版 bw = RW/n*0.82（400 格 → 1.6 单位），
+       渲染到 632px 宽只剩 1px，再加上 42% 透明度的红，肉眼几乎不可见。
+       加宽到 3.2 单位并提亮，才配得上「弹幕是主角之一」。 */
+    const bw = Math.max(3.2, RW / n * 1.5);
+    let s = '';
+    for (let i = 0; i < n; i++){
+      if (!vals[i]) continue;
+      const x = (i / (n - 1)) * RW;
+      const h = 2 + vals[i] * RMAX;
+      s += 'M ' + (x - bw/2).toFixed(1) + ' ' + RY +
+           ' h ' + bw.toFixed(1) + ' v ' + (-h).toFixed(1) +
+           ' h ' + (-bw).toFixed(1) + ' Z ';
+    }
+    return s;
+  }
+
+  function markPath(list){
+    return list.map(m => {
+      const x = (m.i / (Math.max(1, (IS_DUAL ? ENV.samples : ENV.rms.length) - 1))) * RW;
+      return m.kind === 'resonance'
+        ? '<circle class="res" cx="' + x.toFixed(1) + '" cy="' + RY + '" r="2.6"/>'
+        : '<circle class="divt" cx="' + x.toFixed(1) + '" cy="' + RY + '" r="2.2"/>';
+    }).join('');
+  }
+
+  if (ENV) {
+    /* 横带：单信号 = 声纹；双信号 = 混音台 */
+    const svgH = $('ribbonSvg');
+    if (svgH) {
+      let inner = '<line class="axis" x1="0" y1="' + RY + '" x2="' + RW + '" y2="' + RY + '"/>';
+      inner += '<path class="audio" d="' + audioAreaPath(AUDIO) + '"/>';
+      inner += '<path class="line" d="' + audioContour(AUDIO) + '"/>';
+      if (IS_DUAL) {
+        inner += '<path class="dm" d="' + danmakuBars(ENV.danmakuNorm, ENV.samples || ENV.danmakuNorm.length) + '"/>';
+        inner += markPath((ENV.resonance || []).concat(ENV.divergence || []));
+      }
+      svgH.innerHTML = inner;
+    }
+
+    /* 双信号时把图例换成真实数据说明 */
+    const lg = $('ribbonLegend');
+    if (lg && IS_DUAL) {
+      lg.innerHTML = '<span class="a"><i></i>声音 ↓</span>'
+                   + '<span class="d"><i></i>弹幕 ↑ ' + (ENV.danmakuTotal || 0) + ' 条</span>';
+    }
+
+    /* 洞察行：只在双信号时出现，因为只有两条信号才有「关系」可说 */
+    if (IS_DUAL && ENV.danmakuNorm && AUDIO) {
+      const ins = $('insight');
+      if (ins) {
+        ins.hidden = false;
+        ins.innerHTML = scatterBlock(AUDIO, ENV.danmakuNorm, ENV.corr || 0,
+                                     (ENV.resonance || []).length,
+                                     (ENV.divergence || []).length);
+      }
+    }
+  }
+
+  /* ══ 点击声纹跳到对应内容（v6 第三个想法）══
+     点横带任意位置 → 反算出该处对应的视频时间 → 找到时间区间包含它的论证层
+     → 展开并滚过去。找不到就什么都不做（不报错、不误跳）。 */
+  (function(){
+    const rib = document.getElementById('ribbon');
+    if (!rib) return;
+    rib.style.cursor = 'pointer';
+    rib.addEventListener('click', function(ev){
+      const r = rib.getBoundingClientRect();
+      const fx = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
+      const target = fx * DUR;
+      const secp = x => { if (!x) return null; const p = String(x).split(':').map(Number);
+        return p.some(isNaN) ? null : (p.length >= 2 ? p[0]*60+p[1] : p[0]); };
+      const steps = [...document.querySelectorAll('#stack .step')];
+      const list = (isEssay !== undefined ? (D.takeaways || D.note_sections || []) : []);
+      let hit = null;
+      for (let i = 0; i < steps.length; i++){
+        const st = secp((list[i] || {}).t);
+        if (st == null) continue;
+        const nx = (i + 1 < list.length) ? secp(list[i+1].t) : DUR;
+        const b = (nx == null ? DUR : nx);
+        if (target >= st && target < b) { hit = steps[i]; break; }
+      }
+      if (!hit) return;
+      if (hit.tagName === 'DETAILS') hit.open = true;
+      try { hit.scrollIntoView({behavior:'smooth', block:'center'}); }
+      catch(e){ hit.scrollIntoView(); }
+      hit.style.transition = 'background .5s';
+      hit.style.background = 'var(--red-soft)';
+      setTimeout(() => { hit.style.background = ''; }, 1200);
+    });
+  })();
+
+  /* 同步计算，不用 rAF 节流：
+     ① 计算量极小（读 scrollY + 设 2 个 style + 循环 ≤31 个刻度）
+     ② rAF 在无头/虚拟时间环境下可能完全不触发 —— 实测因此游标死不动
+     ③ passive 监听本身已避免阻塞滚动 */
+  /* v11：删掉左侧竖轴后，update() 只负责两件事——
+   ① 推进顶部横带的游标  ② 滚动超过 40px 时把横带收起来。
+   forceProg 参数保留给自动化验证（无头浏览器 scrollTo 不产生滚动）。 */
+  function update(forceProg){
+    const doc = document.documentElement;
+    const max = Math.max(1, doc.scrollHeight - innerHeight);
+    const y = window.pageYOffset || doc.scrollTop || 0;
+    const prog = (typeof forceProg === 'number')
+      ? Math.min(1, Math.max(0, forceProg))
+      : Math.min(1, Math.max(0, y / max));
+
+    const rh = $('ribbonHead');
+    if (rh) rh.style.left = (prog * 100).toFixed(2) + '%';
+
+    const rb = $('railband');
+    if (rb) rb.classList.toggle('stuck', y > 40);
+
+    return { prog, cur: prog * DUR };
+  }
+  addEventListener('scroll', () => update(), {passive:true});
+  addEventListener('resize', () => update(), {passive:true});
+  window.__railUpdate = update;   /* 自动化验证入口 */
+  update();
+})();
+
+/* ══════ 主题 & 顶部 ══════ */
+(function(){
+  const root=document.documentElement, btn=$('tg');
+  const get=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+  const set2=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+  const apply=t=>{root.setAttribute('data-theme',t);btn.textContent=(t==='dark'?'亮':'暗');set2('bili.v3.theme',t)};
+  let q=null; try{q=new URLSearchParams(location.search).get('theme')}catch(e){}
+  let sys='light'; try{sys=matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'}catch(e){}
+  apply(q||get('bili.v3.theme')||sys);
+  btn.onclick=()=>apply(root.getAttribute('data-theme')==='dark'?'light':'dark');
+  $('tp').onclick=()=>{try{scrollTo({top:0,behavior:'smooth'})}catch(e){scrollTo(0,0)}};
+})();
+
+/* ══════ 入场动效 ══════ */
+(function(){
+  const reduced=(()=>{try{return matchMedia('(prefers-reduced-motion:reduce)').matches}catch(e){return false}})();
+  if (reduced || !('IntersectionObserver' in window)) return;
+  document.documentElement.classList.add('anim');
+  const io=new IntersectionObserver(es=>{
+    es.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } });
+  },{threshold:.08, rootMargin:'0px 0px -28px 0px'});
+  document.querySelectorAll('.fade').forEach(el=>io.observe(el));
+  setTimeout(()=>document.querySelectorAll('.fade').forEach(el=>el.classList.add('in')), 3000);
+})();
+</script>
+</body>
+</html>
